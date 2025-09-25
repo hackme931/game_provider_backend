@@ -233,6 +233,37 @@ app.post('/player-info', validateGameProviderApiKey, async (req, res) => {
   }
 });
 
+// ✅ ENDPOINT 5: Get RTP Settings untuk Game Client
+app.get('/rtp/:gameId', validateGameProviderApiKey, async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    console.log('Fetching RTP for game:', gameId);
+    
+    // Fetch RTP dari casino backend
+    const rtpResponse = await fetch(`http://localhost:3000/api/rtp/${gameId}`);
+    
+    if (!rtpResponse.ok) {
+      throw new Error('Failed to fetch RTP from casino backend');
+    }
+    
+    const rtpData = await rtpResponse.json();
+    
+    res.status(200).json({
+      success: true,
+      gameId: gameId,
+      baseRtp: parseFloat(rtpData.base_rtp),
+      gameName: rtpData.game_name
+    });
+    
+  } catch (error) {
+    console.error('RTP fetch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch RTP settings'
+    });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🎮 Game Provider Backend running on port ${PORT}`);
   console.log(`✅ Health check: http://localhost:${PORT}/health`);

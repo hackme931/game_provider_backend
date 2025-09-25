@@ -111,6 +111,7 @@
             <div>Player: <span id="playerName">-</span></div>
             <div>Balance: <span id="balance">0</span> <span id="currency">IDR</span></div>
             <div>Free Spins: <span id="freeSpins">0</span> 🎁</div>
+            <div>RTP: <span id="rtpDisplay">96.5%</span> 📊</div>
             <div>Session: <span id="sessionId">-</span></div>
         </div>
 
@@ -143,16 +144,18 @@
 
     <script>
         // Game state dengan FREE SPIN feature
-        let gameState = {
-            sessionId: null,
-            userId: null,
-            balance: 0,
-            username: '',
-            isSpinning: false,
-            betAmount: 100,
-            freeSpins: 0, // FREE SPIN COUNTER
-            isFreeSpin: false
-        };
+        // Game state - TAMBAH rtp
+let gameState = {
+    sessionId: null,
+    userId: null,
+    balance: 0,
+    username: '',
+    isSpinning: false,
+    betAmount: 100,
+    freeSpins: 0,
+    isFreeSpin: false,
+    rtp: 96.5 // ✅ DEFAULT RTP
+};
 
         // ✅ TAMBAH SYMBOL 🗿 untuk free spin
         const symbols = ['🍒', '🍋', '🍊', '⭐', '🔔', '🗿'];
@@ -262,6 +265,30 @@ async function fetchPlayerInfo(playerToken) {
     }
 }
 
+// ✅ FUNCTION BARU: Fetch RTP Settings
+async function fetchRtpSettings() {
+    try {
+        const response = await fetch(`${API_BASE}/rtp/simple_slot`, {
+            method: 'GET',
+            headers: {
+                'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch RTP settings');
+        }
+        
+        const data = await response.json();
+        gameState.rtp = data.baseRtp;
+        console.log('RTP loaded:', gameState.rtp + '%');
+        
+    } catch (error) {
+        console.error('RTP fetch error, using default:', error);
+        // Tetap pakai default RTP jika error
+    }
+}
+
         // ✅ FUNCTION: Change Bet Amount
         function changeBet(amount) {
             const betInput = document.getElementById('betAmount');
@@ -331,6 +358,8 @@ async function fetchPlayerInfo(playerToken) {
             const urlParams = new URLSearchParams(window.location.search);
             const playerToken = urlParams.get('token');
             
+            await fetchRtpSettings();
+            
             if (playerToken) {
                 try {
                     const playerInfo = await fetchPlayerInfo(playerToken);
@@ -357,7 +386,9 @@ async function fetchPlayerInfo(playerToken) {
             document.getElementById('playerName').textContent = username;
             document.getElementById('balance').textContent = gameState.balance.toLocaleString();
             document.getElementById('currency').textContent = currency;
+        
             document.getElementById('sessionId').textContent = gameState.sessionId || 'demo-session';
+            document.getElementById('rtpDisplay').textContent = gameState.rtp + '%';
             
             // Auto-adjust bet jika melebihi balance
             if (gameState.betAmount > gameState.balance) {
@@ -454,33 +485,54 @@ async function fetchPlayerInfo(playerToken) {
         }
 
         // ✅ UPDATED WIN LOGIC dengan FREE SPIN symbol
-        function getSpinResult(betAmount) {
-            const reels = [
-                symbols[Math.floor(Math.random() * symbols.length)],
-                symbols[Math.floor(Math.random() * symbols.length)],
-                symbols[Math.floor(Math.random() * symbols.length)]
-            ];
+// ✅ UPDATE WIN LOGIC DENGAN RTP
+function getSpinResult(betAmount) {
+    const reels = [
+        symbols[Math.floor(Math.random() * symbols.length)],
+        symbols[Math.floor(Math.random() * symbols.length)],
+        symbols[Math.floor(Math.random() * symbols.length)]
+    ];
 
-            document.getElementById('reel1').textContent = reels[0];
-            document.getElementById('reel2').textContent = reels[1];
-            document.getElementById('reel3').textContent = reels[2];
+    document.getElementById('reel1').textContent = reels[0];
+    document.getElementById('reel2').textContent = reels[1];
+    document.getElementById('reel3').textContent = reels[2];
 
-            let message = '';
-            let winAmount = 0;
+    let message = '';
+    let winAmount = 0;
 
-            // Normal win logic (tetap bekerja)
-            if (reels[0] === reels[1] && reels[1] === reels[2]) {
-                winAmount = betAmount * 3;
-                message = `JACKPOT! You win ${winAmount.toLocaleString()} IDR!`;
-            } else if (reels[0] === reels[1] || reels[1] === reels[2]) {
-                winAmount = Math.round(betAmount * 0.5);
-                message = `You win ${winAmount.toLocaleString()} IDR!`;
-            } else {
-                message = 'Try again!';
-            }
+    // ✅ RTP-BASED PROBABILITY CALCULATION
+    const rtpFactor = gameState.rtp / 96.5; // Normalize terhadap base RTP 96.5%
+    const random = Math.random();
 
-            return { reels, winAmount, message };
-        }
+    // Probability adjustments berdasarkan RTP
+    const jackpotProb = 0.05 * rtpFactor;    // 5% base probability
+    const smallWinProb = 0.25 * rtpFactor;   // 25% base probability  
+    const freeSpinProb = 0.10 * rtpFactor;   // 10% base probability
+
+    if (random < jackpotProb) {
+        // JACKPOT - 3 symbols sama
+        winAmount = betAmount * 3;
+        message = `JACKPOT! You win ${winAmount.toLocaleString()} IDR!`;
+    } 
+    else if (random < jackpotProb + smallWinProb) {
+        // SMALL WIN - 2 symbols sama
+        winAmount = Math.round(betAmount * 0.5);
+        message = `You win ${winAmount.toLocaleString()} IDR!`;
+    }
+    else {
+        // NO WIN
+        message = 'Try again!';
+    }
+
+    // ✅ FREE SPIN LOGIC (terpisah dari win logic)
+    const freeSpinsWon = checkFreeSpinWin(reels);
+    if (freeSpinsWon > 0) {
+        gameState.freeSpins += freeSpinsWon;
+        message += ` + ${freeSpinsWon} FREE SPINS! 🎁`;
+    }
+
+    return { reels, winAmount, message };
+}
 
         function displayResult(result) {
             document.getElementById('result').textContent = result.message;
