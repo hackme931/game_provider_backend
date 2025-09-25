@@ -61,6 +61,30 @@
             border-radius: 5px;
             margin: 10px 0;
         }
+        .bet-controls {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .bet-controls input {
+            width: 80px;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .bet-controls button {
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+        .bet-info {
+            margin: 10px 0;
+            font-size: 14px;
+            color: #ddd;
+        }
     </style>
 </head>
 <body>
@@ -80,6 +104,20 @@
                 <div class="reel" id="reel3">🍊</div>
             </div>
             
+            <!-- BET CONTROLS BARU -->
+            <div class="bet-controls">
+                <label>Bet Amount: </label>
+                <button onclick="changeBet(-50)">-50</button>
+                <button onclick="changeBet(-10)">-10</button>
+                <input type="number" id="betAmount" value="100" min="10" max="5000" onchange="validateBet()">
+                <button onclick="changeBet(10)">+10</button>
+                <button onclick="changeBet(50)">+50</button>
+            </div>
+            
+            <div class="bet-info">
+                Min: 10 IDR | Max: 5000 IDR
+            </div>
+            
             <button id="spinBtn" onclick="spin()">SPIN (100 IDR)</button>
             <div id="result"></div>
         </div>
@@ -88,17 +126,17 @@
     </div>
 
     <script>
-        // Game state
+        // Game state - DITAMBAH betAmount
         let gameState = {
             sessionId: null,
             userId: null,
             balance: 0,
             username: '',
-            isSpinning: false
+            isSpinning: false,
+            betAmount: 100  // Default bet amount
         };
 
         const symbols = ['🍒', '🍋', '🍊', '⭐', '🔔'];
-        const betAmount = 100;
         const API_BASE = 'http://localhost:4000';
 
         // ✅ DEBIT BALANCE function
@@ -172,6 +210,42 @@
             return data;
         }
 
+        // ✅ FUNCTION BARU: Change Bet Amount
+        function changeBet(amount) {
+            const betInput = document.getElementById('betAmount');
+            let newBet = parseInt(betInput.value) + amount;
+            
+            // Validate min/max bet
+            if (newBet < 10) newBet = 10;
+            if (newBet > 5000) newBet = 5000;
+            if (newBet > gameState.balance) newBet = gameState.balance;
+            
+            betInput.value = newBet;
+            gameState.betAmount = newBet;
+            updateSpinButton();
+        }
+
+        // ✅ FUNCTION BARU: Validate Manual Input
+        function validateBet() {
+            const betInput = document.getElementById('betAmount');
+            let newBet = parseInt(betInput.value);
+            
+            if (isNaN(newBet)) newBet = 100;
+            if (newBet < 10) newBet = 10;
+            if (newBet > 5000) newBet = 5000;
+            if (newBet > gameState.balance) newBet = gameState.balance;
+            
+            betInput.value = newBet;
+            gameState.betAmount = newBet;
+            updateSpinButton();
+        }
+
+        // ✅ FUNCTION BARU: Update Spin Button Text
+        function updateSpinButton() {
+            const spinBtn = document.getElementById('spinBtn');
+            spinBtn.textContent = `SPIN (${gameState.betAmount} IDR)`;
+        }
+
         // Initialize game
         async function initializeGame() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -203,13 +277,24 @@
             document.getElementById('balance').textContent = gameState.balance.toLocaleString();
             document.getElementById('currency').textContent = currency;
             document.getElementById('sessionId').textContent = gameState.sessionId || 'demo-session';
+            
+            // ✅ AUTO-ADJUST BET JIKA MELEBIHI BALANCE
+            if (gameState.betAmount > gameState.balance) {
+                gameState.betAmount = Math.max(10, gameState.balance);
+                document.getElementById('betAmount').value = gameState.betAmount;
+                updateSpinButton();
+            }
         }
 
-        // ✅ SPIN FUNCTION dengan DEBIT/CREDIT REAL
+        // ✅ SPIN FUNCTION YANG DIUPDATE UNTUK DYNAMIC BET AMOUNT
         async function spin() {
             if (gameState.isSpinning) return;
-            if (gameState.balance < betAmount) {
-                alert('Saldo tidak cukup!');
+            
+            // Gunakan dynamic bet amount
+            const currentBet = gameState.betAmount;
+            
+            if (gameState.balance < currentBet) {
+                alert(`Saldo tidak cukup! Butuh ${currentBet} IDR, saldo Anda: ${gameState.balance} IDR`);
                 return;
             }
 
@@ -218,16 +303,16 @@
             document.getElementById('result').textContent = 'Processing...';
 
             try {
-                // 1. DEBIT balance via casino backend (REAL TRANSACTION)
-                const debitResult = await debitBalance(betAmount);
+                // 1. DEBIT balance dengan current bet amount
+                const debitResult = await debitBalance(currentBet);
                 
                 // 2. Putar animasi
                 await spinAnimation();
                 
-                // 3. Tentukan hasil
-                const result = getSpinResult();
+                // 3. Tentukan hasil (win amount proportional dengan bet)
+                const result = getSpinResult(currentBet);
                 
-                // 4. CREDIT jika menang (REAL TRANSACTION)
+                // 4. CREDIT jika menang
                 if (result.winAmount > 0) {
                     const creditResult = await creditBalance(result.winAmount);
                     gameState.balance = parseFloat(creditResult.newBalance);
@@ -269,7 +354,8 @@
             });
         }
 
-        function getSpinResult() {
+        // ✅ WIN LOGIC YANG DIUPDATE UNTUK PROPORTIONAL DENGAN BET AMOUNT
+        function getSpinResult(betAmount) {
             const reels = [
                 symbols[Math.floor(Math.random() * symbols.length)],
                 symbols[Math.floor(Math.random() * symbols.length)],
@@ -280,11 +366,13 @@
             document.getElementById('reel2').textContent = reels[1];
             document.getElementById('reel3').textContent = reels[2];
 
-            // Win logic
+            // Win logic - proportional to bet amount
             if (reels[0] === reels[1] && reels[1] === reels[2]) {
-                return { reels, winAmount: 300, message: 'JACKPOT! You win 300 IDR!' };
+                const winAmount = betAmount * 3; // 3x bet untuk jackpot
+                return { reels, winAmount, message: `JACKPOT! You win ${winAmount.toLocaleString()} IDR!` };
             } else if (reels[0] === reels[1] || reels[1] === reels[2]) {
-                return { reels, winAmount: 50, message: 'You win 50 IDR!' };
+                const winAmount = Math.round(betAmount * 0.5); // 0.5x bet untuk small win
+                return { reels, winAmount, message: `You win ${winAmount.toLocaleString()} IDR!` };
             } else {
                 return { reels, winAmount: 0, message: 'Try again!' };
             }
