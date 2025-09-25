@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Slot Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .game-container {
+            max-width: 400px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .slot-machine {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .reels {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .reel {
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #333;
+        }
+        button {
+            background: #ffd700;
+            color: #333;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .player-info {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🎰 Simple Slot Game</h1>
+        
+        <div class="player-info">
+            <div>Player: <span id="playerName">-</span></div>
+            <div>Balance: <span id="balance">0</span> <span id="currency">IDR</span></div>
+            <div>Session: <span id="sessionId">-</span></div>
+        </div>
+
+        <div class="slot-machine">
+            <div class="reels">
+                <div class="reel" id="reel1">🍒</div>
+                <div class="reel" id="reel2">🍋</div>
+                <div class="reel" id="reel3">🍊</div>
+            </div>
+            
+            <button id="spinBtn" onclick="spin()">SPIN (100 IDR)</button>
+            <div id="result"></div>
+        </div>
+
+        <div id="debug"></div>
+    </div>
+
+    <script>
+        // Game state
+        let gameState = {
+            sessionId: null,
+            userId: null,
+            balance: 0,
+            username: '',
+            isSpinning: false
+        };
+
+        const symbols = ['🍒', '🍋', '🍊', '⭐', '🔔'];
+        const betAmount = 100;
+        const API_BASE = 'http://localhost:4000';
+
+        // ✅ DEBIT BALANCE function
+        async function debitBalance(amount) {
+            const roundId = `round_${Date.now()}`;
+            
+            const response = await fetch(`${API_BASE}/debit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
+                },
+                body: JSON.stringify({
+                    sessionId: gameState.sessionId,
+                    userId: gameState.userId,
+                    roundId: roundId,
+                    amount: amount
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Debit failed');
+            }
+            
+            return await response.json();
+        }
+
+        // ✅ CREDIT BALANCE function
+        async function creditBalance(amount) {
+            const roundId = `round_${Date.now()}`;
+            
+            const response = await fetch(`${API_BASE}/credit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
+                },
+                body: JSON.stringify({
+                    sessionId: gameState.sessionId,
+                    userId: gameState.userId,
+                    roundId: roundId,
+                    amount: amount
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Credit failed');
+            }
+            
+            return await response.json();
+        }
+
+        // ✅ GET PLAYER INFO function
+        async function fetchPlayerInfo(playerToken) {
+            const response = await fetch(`${API_BASE}/player-info`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
+                },
+                body: JSON.stringify({ playerToken: playerToken })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch player info');
+            }
+            
+            const data = await response.json();
+            return data;
+        }
+
+        // Initialize game
+        async function initializeGame() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const playerToken = urlParams.get('token');
+            
+            if (playerToken) {
+                try {
+                    const playerInfo = await fetchPlayerInfo(playerToken);
+                    gameState.userId = playerInfo.userId;
+                    gameState.sessionId = `gp_${Date.now()}_${playerInfo.userId}`;
+                    gameState.username = playerInfo.username;
+                    
+                    updatePlayerInfo(playerInfo.username, playerInfo.balance, playerInfo.currency);
+                    document.getElementById('debug').textContent = 'Player data loaded successfully';
+                } catch (error) {
+                    console.error('Failed to load player info:', error);
+                    document.getElementById('debug').textContent = 'Failed to load player data: ' + error.message;
+                }
+            } else {
+                document.getElementById('debug').textContent = 'No player token provided - using demo mode';
+                // Demo mode untuk testing
+                updatePlayerInfo('demo_player', 10000, 'IDR');
+            }
+        }
+
+        function updatePlayerInfo(username, balance, currency) {
+            gameState.balance = parseFloat(balance);
+            document.getElementById('playerName').textContent = username;
+            document.getElementById('balance').textContent = gameState.balance.toLocaleString();
+            document.getElementById('currency').textContent = currency;
+            document.getElementById('sessionId').textContent = gameState.sessionId || 'demo-session';
+        }
+
+        // ✅ SPIN FUNCTION dengan DEBIT/CREDIT REAL
+        async function spin() {
+            if (gameState.isSpinning) return;
+            if (gameState.balance < betAmount) {
+                alert('Saldo tidak cukup!');
+                return;
+            }
+
+            gameState.isSpinning = true;
+            document.getElementById('spinBtn').disabled = true;
+            document.getElementById('result').textContent = 'Processing...';
+
+            try {
+                // 1. DEBIT balance via casino backend (REAL TRANSACTION)
+                const debitResult = await debitBalance(betAmount);
+                
+                // 2. Putar animasi
+                await spinAnimation();
+                
+                // 3. Tentukan hasil
+                const result = getSpinResult();
+                
+                // 4. CREDIT jika menang (REAL TRANSACTION)
+                if (result.winAmount > 0) {
+                    const creditResult = await creditBalance(result.winAmount);
+                    gameState.balance = parseFloat(creditResult.newBalance);
+                } else {
+                    gameState.balance = parseFloat(debitResult.newBalance);
+                }
+                
+                displayResult(result);
+                updatePlayerInfo(gameState.username, gameState.balance, 'IDR');
+
+            } catch (error) {
+                console.error('Spin error:', error);
+                document.getElementById('result').textContent = 'Error: ' + error.message;
+            } finally {
+                gameState.isSpinning = false;
+                document.getElementById('spinBtn').disabled = false;
+            }
+        }
+
+        function spinAnimation() {
+            return new Promise(resolve => {
+                let spins = 0;
+                const maxSpins = 10;
+                
+                const spinInterval = setInterval(() => {
+                    document.getElementById('reel1').textContent = 
+                        symbols[Math.floor(Math.random() * symbols.length)];
+                    document.getElementById('reel2').textContent = 
+                        symbols[Math.floor(Math.random() * symbols.length)];
+                    document.getElementById('reel3').textContent = 
+                        symbols[Math.floor(Math.random() * symbols.length)];
+                    
+                    spins++;
+                    if (spins >= maxSpins) {
+                        clearInterval(spinInterval);
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+
+        function getSpinResult() {
+            const reels = [
+                symbols[Math.floor(Math.random() * symbols.length)],
+                symbols[Math.floor(Math.random() * symbols.length)],
+                symbols[Math.floor(Math.random() * symbols.length)]
+            ];
+
+            document.getElementById('reel1').textContent = reels[0];
+            document.getElementById('reel2').textContent = reels[1];
+            document.getElementById('reel3').textContent = reels[2];
+
+            // Win logic
+            if (reels[0] === reels[1] && reels[1] === reels[2]) {
+                return { reels, winAmount: 300, message: 'JACKPOT! You win 300 IDR!' };
+            } else if (reels[0] === reels[1] || reels[1] === reels[2]) {
+                return { reels, winAmount: 50, message: 'You win 50 IDR!' };
+            } else {
+                return { reels, winAmount: 0, message: 'Try again!' };
+            }
+        }
+
+        function displayResult(result) {
+            document.getElementById('result').textContent = result.message;
+        }
+
+        window.onload = initializeGame;
+    </script>
+</body>
+</html>
