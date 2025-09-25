@@ -85,6 +85,22 @@
             font-size: 14px;
             color: #ddd;
         }
+        .free-spin-active {
+            background: linear-gradient(45deg, #ffd700, #ff6b6b) !important;
+            animation: glow 1s infinite alternate;
+        }
+        @keyframes glow {
+            from { box-shadow: 0 0 5px #ffd700; }
+            to { box-shadow: 0 0 20px #ffd700; }
+        }
+        .free-spin-badge {
+            background: #ff4757;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
@@ -94,6 +110,7 @@
         <div class="player-info">
             <div>Player: <span id="playerName">-</span></div>
             <div>Balance: <span id="balance">0</span> <span id="currency">IDR</span></div>
+            <div>Free Spins: <span id="freeSpins">0</span> 🎁</div>
             <div>Session: <span id="sessionId">-</span></div>
         </div>
 
@@ -104,7 +121,6 @@
                 <div class="reel" id="reel3">🍊</div>
             </div>
             
-            <!-- BET CONTROLS BARU -->
             <div class="bet-controls">
                 <label>Bet Amount: </label>
                 <button onclick="changeBet(-50)">-50</button>
@@ -115,7 +131,7 @@
             </div>
             
             <div class="bet-info">
-                Min: 10 IDR | Max: 5000 IDR
+                Min: 10 IDR | Max: 5000 IDR | Symbol 🗿 = Free Spins!
             </div>
             
             <button id="spinBtn" onclick="spin()">SPIN (100 IDR)</button>
@@ -126,36 +142,37 @@
     </div>
 
     <script>
-        // Game state - DITAMBAH betAmount
+        // Game state dengan FREE SPIN feature
         let gameState = {
             sessionId: null,
             userId: null,
             balance: 0,
             username: '',
             isSpinning: false,
-            betAmount: 100  // Default bet amount
+            betAmount: 100,
+            freeSpins: 0, // FREE SPIN COUNTER
+            isFreeSpin: false
         };
 
-        const symbols = ['🍒', '🍋', '🍊', '⭐', '🔔'];
+        // ✅ TAMBAH SYMBOL 🗿 untuk free spin
+        const symbols = ['🍒', '🍋', '🍊', '⭐', '🔔', '🗿'];
         const API_BASE = 'http://localhost:4000';
 
         // ✅ DEBIT BALANCE function
         async function debitBalance(amount) {
-            const roundId = `round_${Date.now()}`;
-            
-            const response = await fetch(`${API_BASE}/debit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
-                },
-                body: JSON.stringify({
-                    sessionId: gameState.sessionId,
-                    userId: gameState.userId,
-                    roundId: roundId,
-                    amount: amount
-                })
-            });
+    const response = await fetch(`http://localhost:4000/debit`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
+        },
+        body: JSON.stringify({
+            sessionId: gameState.sessionId,
+            userId: gameState.userId,
+            roundId: `round_${Date.now()}`,
+            amount: amount
+        })
+    });
             
             if (!response.ok) {
                 const errorData = await response.json();
@@ -167,21 +184,19 @@
 
         // ✅ CREDIT BALANCE function
         async function creditBalance(amount) {
-            const roundId = `round_${Date.now()}`;
-            
-            const response = await fetch(`${API_BASE}/credit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
-                },
-                body: JSON.stringify({
-                    sessionId: gameState.sessionId,
-                    userId: gameState.userId,
-                    roundId: roundId,
-                    amount: amount
-                })
-            });
+    const response = await fetch(`http://localhost:4000/credit`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
+        },
+        body: JSON.stringify({
+            sessionId: gameState.sessionId,
+            userId: gameState.userId,
+            roundId: `round_${Date.now()}`,
+            amount: amount
+        })
+    });
             
             if (!response.ok) {
                 const errorData = await response.json();
@@ -191,26 +206,63 @@
             return await response.json();
         }
 
-        // ✅ GET PLAYER INFO function
-        async function fetchPlayerInfo(playerToken) {
-            const response = await fetch(`${API_BASE}/player-info`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
-                },
-                body: JSON.stringify({ playerToken: playerToken })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to fetch player info');
-            }
-            
-            const data = await response.json();
-            return data;
-        }
+        // ✅ FREE SPIN DEBIT function
+        // ✅ PERBAIKI URL FREE SPIN - arahkan ke CASINO BACKEND, bukan game provider
+async function debitFreespin(roundId, bonusCode = null) {
+    const response = await fetch(`http://localhost:3000/api/game/debit/freespin`, {
+        method: 'POST',
+        headers: {
+            'x-api-key': 'KunciSuperRahasiaGameServer123!@#',
+            'x-session-id': gameState.sessionId,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            userId: gameState.userId,
+            roundId: roundId,
+            bonusCode: bonusCode
+        })
+    });
+    
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Free spin failed');
+    }
+    
+    return await response.json();
+}
 
-        // ✅ FUNCTION BARU: Change Bet Amount
+        // ✅ GET PLAYER INFO function
+async function fetchPlayerInfo(playerToken) {
+    try {
+        const response = await fetch(`${API_BASE}/player-info`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': 'KunciSuperRahasiaGameServer123!@#'
+            },
+            body: JSON.stringify({ playerToken: playerToken })
+        });
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Player info data:', data);
+        return data;
+        
+    } catch (error) {
+        console.error('Fetch player info failed:', error);
+        throw error;
+    }
+}
+
+        // ✅ FUNCTION: Change Bet Amount
         function changeBet(amount) {
             const betInput = document.getElementById('betAmount');
             let newBet = parseInt(betInput.value) + amount;
@@ -225,7 +277,7 @@
             updateSpinButton();
         }
 
-        // ✅ FUNCTION BARU: Validate Manual Input
+        // ✅ FUNCTION: Validate Manual Input
         function validateBet() {
             const betInput = document.getElementById('betAmount');
             let newBet = parseInt(betInput.value);
@@ -240,10 +292,38 @@
             updateSpinButton();
         }
 
-        // ✅ FUNCTION BARU: Update Spin Button Text
+        // ✅ FUNCTION: Update Spin Button Text
         function updateSpinButton() {
             const spinBtn = document.getElementById('spinBtn');
-            spinBtn.textContent = `SPIN (${gameState.betAmount} IDR)`;
+            if (gameState.freeSpins > 0) {
+                spinBtn.textContent = `FREE SPIN (${gameState.freeSpins} left)`;
+                spinBtn.classList.add('free-spin-active');
+            } else {
+                spinBtn.textContent = `SPIN (${gameState.betAmount} IDR)`;
+                spinBtn.classList.remove('free-spin-active');
+            }
+        }
+
+        // ✅ FUNCTION: Update Free Spin UI
+        function updateFreeSpinUI() {
+            document.getElementById('freeSpins').textContent = gameState.freeSpins;
+            updateSpinButton();
+        }
+
+        // ✅ FUNCTION: Check Free Spin Win
+        function checkFreeSpinWin(reels) {
+            const stoneCount = reels.filter(symbol => symbol === '🗿').length;
+            
+            switch(stoneCount) {
+                case 1:
+                    return 0; // 1🗿 = 2 free spins
+                case 2:
+                    return 1; // 2🗿 = 5 free spins
+                case 3:
+                    return 3; // 3🗿 = 10 free spins
+                default:
+                    return 0;
+            }
         }
 
         // Initialize game
@@ -259,6 +339,7 @@
                     gameState.username = playerInfo.username;
                     
                     updatePlayerInfo(playerInfo.username, playerInfo.balance, playerInfo.currency);
+                    updateFreeSpinUI();
                     document.getElementById('debug').textContent = 'Player data loaded successfully';
                 } catch (error) {
                     console.error('Failed to load player info:', error);
@@ -266,8 +347,8 @@
                 }
             } else {
                 document.getElementById('debug').textContent = 'No player token provided - using demo mode';
-                // Demo mode untuk testing
                 updatePlayerInfo('demo_player', 10000, 'IDR');
+                updateFreeSpinUI();
             }
         }
 
@@ -278,7 +359,7 @@
             document.getElementById('currency').textContent = currency;
             document.getElementById('sessionId').textContent = gameState.sessionId || 'demo-session';
             
-            // ✅ AUTO-ADJUST BET JIKA MELEBIHI BALANCE
+            // Auto-adjust bet jika melebihi balance
             if (gameState.betAmount > gameState.balance) {
                 gameState.betAmount = Math.max(10, gameState.balance);
                 document.getElementById('betAmount').value = gameState.betAmount;
@@ -286,49 +367,67 @@
             }
         }
 
-        // ✅ SPIN FUNCTION YANG DIUPDATE UNTUK DYNAMIC BET AMOUNT
+        // ✅ UPDATED SPIN FUNCTION dengan FREE SPIN support
         async function spin() {
             if (gameState.isSpinning) return;
             
-            // Gunakan dynamic bet amount
-            const currentBet = gameState.betAmount;
+            const isFreeSpin = gameState.freeSpins > 0;
+            const currentBet = isFreeSpin ? 0 : gameState.betAmount;
             
-            if (gameState.balance < currentBet) {
+            if (!isFreeSpin && gameState.balance < currentBet) {
                 alert(`Saldo tidak cukup! Butuh ${currentBet} IDR, saldo Anda: ${gameState.balance} IDR`);
                 return;
             }
 
             gameState.isSpinning = true;
             document.getElementById('spinBtn').disabled = true;
-            document.getElementById('result').textContent = 'Processing...';
+            document.getElementById('result').textContent = isFreeSpin ? 'Free Spinning...' : 'Processing...';
 
             try {
-                // 1. DEBIT balance dengan current bet amount
-                const debitResult = await debitBalance(currentBet);
+                // ✅ FREE SPIN: Debit free spin instead of money
+                if (isFreeSpin) {
+                    const roundId = `freespin_${Date.now()}`;
+                    await debitFreespin(roundId, 'stone_bonus');
+                    gameState.freeSpins--; // Kurangi free spin counter
+                } 
+                // ✅ NORMAL SPIN: Debit balance
+                else {
+                    const debitResult = await debitBalance(currentBet);
+                    gameState.balance = parseFloat(debitResult.newBalance);
+                }
                 
-                // 2. Putar animasi
+                // Putar animasi
                 await spinAnimation();
                 
-                // 3. Tentukan hasil (win amount proportional dengan bet)
-                const result = getSpinResult(currentBet);
+                // Tentukan hasil
+                const result = getSpinResult(isFreeSpin ? 0 : currentBet);
                 
-                // 4. CREDIT jika menang
+                // ✅ CHECK FREE SPIN WIN
+                const freeSpinsWon = checkFreeSpinWin(result.reels);
+                if (freeSpinsWon > 0) {
+                    gameState.freeSpins += freeSpinsWon;
+                    result.message += ` + ${freeSpinsWon} FREE SPINS! 🎁`;
+                }
+                
+                // Credit jika menang (baik free spin maupun normal)
                 if (result.winAmount > 0) {
                     const creditResult = await creditBalance(result.winAmount);
                     gameState.balance = parseFloat(creditResult.newBalance);
-                } else {
-                    gameState.balance = parseFloat(debitResult.newBalance);
                 }
                 
                 displayResult(result);
                 updatePlayerInfo(gameState.username, gameState.balance, 'IDR');
+                updateFreeSpinUI();
 
             } catch (error) {
                 console.error('Spin error:', error);
                 document.getElementById('result').textContent = 'Error: ' + error.message;
+                // Jika error, kembalikan free spin
+                if (isFreeSpin) gameState.freeSpins++;
             } finally {
                 gameState.isSpinning = false;
                 document.getElementById('spinBtn').disabled = false;
+                updateFreeSpinUI();
             }
         }
 
@@ -354,7 +453,7 @@
             });
         }
 
-        // ✅ WIN LOGIC YANG DIUPDATE UNTUK PROPORTIONAL DENGAN BET AMOUNT
+        // ✅ UPDATED WIN LOGIC dengan FREE SPIN symbol
         function getSpinResult(betAmount) {
             const reels = [
                 symbols[Math.floor(Math.random() * symbols.length)],
@@ -366,16 +465,21 @@
             document.getElementById('reel2').textContent = reels[1];
             document.getElementById('reel3').textContent = reels[2];
 
-            // Win logic - proportional to bet amount
+            let message = '';
+            let winAmount = 0;
+
+            // Normal win logic (tetap bekerja)
             if (reels[0] === reels[1] && reels[1] === reels[2]) {
-                const winAmount = betAmount * 3; // 3x bet untuk jackpot
-                return { reels, winAmount, message: `JACKPOT! You win ${winAmount.toLocaleString()} IDR!` };
+                winAmount = betAmount * 3;
+                message = `JACKPOT! You win ${winAmount.toLocaleString()} IDR!`;
             } else if (reels[0] === reels[1] || reels[1] === reels[2]) {
-                const winAmount = Math.round(betAmount * 0.5); // 0.5x bet untuk small win
-                return { reels, winAmount, message: `You win ${winAmount.toLocaleString()} IDR!` };
+                winAmount = Math.round(betAmount * 0.5);
+                message = `You win ${winAmount.toLocaleString()} IDR!`;
             } else {
-                return { reels, winAmount: 0, message: 'Try again!' };
+                message = 'Try again!';
             }
+
+            return { reels, winAmount, message };
         }
 
         function displayResult(result) {

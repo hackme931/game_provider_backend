@@ -182,6 +182,7 @@ app.get('/game', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'game.html'));
 });
 // ✅ ENDPOINT 4: Get Player Info untuk Game Client
+// ✅ ENDPOINT 4: Get Player Info untuk Game Client
 app.post('/player-info', validateGameProviderApiKey, async (req, res) => {
   try {
     const { playerToken } = req.body;
@@ -191,7 +192,7 @@ app.post('/player-info', validateGameProviderApiKey, async (req, res) => {
     }
 
     // Decode JWT token
-    const decoded = jwt.verify(playerToken, '123');
+    const decoded = jwt.verify(playerToken, '123'); // Secret dari casino backend
     const userId = decoded.user.id;
 
     // Fetch balance dari casino backend
@@ -218,6 +219,12 @@ app.post('/player-info', validateGameProviderApiKey, async (req, res) => {
     });
 
   } catch (error) {
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Invalid player token' 
+      });
+    }
     console.error('Player info error:', error);
     res.status(500).json({ 
       success: false,
